@@ -21,6 +21,7 @@
 
 참고:
 
+- **AI-SPM**은 [별도 문서](ai-spm-technology-and-products.md)에서 기술 수준과 제품을 자세히 다룬다.
 - **샌드박스 격리 수준**: 비교 자료들은 E2B가 샌드박스마다 전용 커널을 갖는 Firecracker microVM,
   Modal이 gVisor를 쓴다는 데 일치한다. Daytona는 자료마다 설명이 달라(기본 컨테이너 vs VM 스냅샷)
   도입 전 공식 문서 확인이 필요하다.
