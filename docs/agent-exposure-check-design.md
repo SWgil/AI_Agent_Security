@@ -104,6 +104,69 @@ Personal Data Engine은 여러 앱과 시스템에서 데이터를 모아 기기
 | 위치 이력 | 집·직장 추정, 이동 기록 | 위치 기록, 사진 메타데이터 |
 | 사적 대화 | 메신저·문자 내용 | 메시지 앱, 알림 |
 
+### 4.3.1 갤러리 전체 스캔의 부하
+
+> 2026년 11월 16일 웹 검색으로 추가. 검색 결과 요약에 근거하며 원문 전체를 열어 확인하지는 않았다.
+> "규모 추정"과 "부하를 줄이는 설계"는 조사 결과가 아니라 작성자의 추정과 분석이다.
+
+개인정보를 찾으려면 사진 전체를 읽어야 한다. 부담이 되는 작업이지만 **기기 안에서 사진 보관함 전체를
+분석하는 일은 이미 상용 제품이 하고 있다.**
+
+| 사례 | 하는 일 | 처리 위치와 시점 |
+|---|---|---|
+| Apple 사진 앱 | 장면 분류, 사람·반려동물 식별, 사진 품질 분석, 오디오 분류 | 기기 내. Apple은 사용자가 다른 작업을 할 때 처리 능력을 쓰지 않도록 배터리를 고려해 설계했다고 설명한다. 얼굴 군집화는 주기적으로, 보통 밤사이 충전 중에 돈다 |
+| 삼성 갤러리 | 사진 내용을 분석해 태그를 자동으로 붙이고 범주로 묶는다. Galaxy S25부터 자연어 검색 지원 | 삼성은 검색 모델을 최적화·압축해 기기 내에서 빠르게 돌도록 했다고 밝혔다. 색인 시점(충전 중 여부)에 대한 설명은 찾지 못했다 |
+| Samsung Personal Data Engine | 개인 데이터를 모아 처리하고 암호화해 Knox Vault에 보관한다 | 기기 내. 개인 데이터 인텔리전스 설정을 끄면 분석된 데이터가 삭제된다 |
+| Android System SafetyCore | 민감한 이미지(노출) 분류. Google 메시지의 민감한 콘텐츠 경고에 쓰인다 | 기기 내. 보관함 전체를 훑지 않고 앱이 요청한 이미지만 분류한다 |
+| SecretScan (iOS 서드파티 앱) | 사진 보관함의 스크린샷·문서 사진에서 비밀번호, 카드, 신분증 등을 OCR로 찾는다 | 기기 내 (앱 스토어 소개문 기준) |
+
+- **Google 포토는 이 목록에 넣지 않았다.** 얼굴 묶기, 사물 인식, 텍스트 추출이 Google 서버에서 처리된다는
+  설명이 다수다(2차 자료 기준). 기기 내 처리의 선례가 아니다.
+- Apple의 "기기가 잠겨 있고 충전 중일 때 정리한다"는 문구는 2차 자료로만 확인했다.
+- 사진 속 글자(OCR)를 삼성 갤러리가 색인하는지는 이번 검색에서 확인하지 못했다.
+
+출처:
+[Apple: 사진 및 개인정보 보호](https://www.apple.com/legal/privacy/data/en/photos),
+[Apple 사진 기술 개요 (2019)](https://apple.com/ph/ios/photos/pdf/Photos_Tech_Brief_Sept_2019.pdf),
+[Apple ML 연구: 사진 속 사람 인식](https://machinelearning.apple.com/research/recognizing-people-photos),
+[Apple ML 연구: 기기 내 장면 분석](https://machinelearning.apple.com/research/on-device-scene-analysis),
+[Samsung: 갤러리 검색 기능](https://www.samsung.com/ae/support/mobile-devices/samsung-gallery-using-the-search-function/),
+[Samsung Newsroom: Galaxy S25 갤러리 인터뷰](https://news.samsung.com/global/interview-a-new-and-enhanced-gallery-experience-how-samsung-transformed-photo-searching-and-video-editing-with-the-galaxy-s25-series),
+[Samsung: Galaxy AI](https://www.samsung.com/galaxy-ai/),
+[Samsung Newsroom: Galaxy AI의 개인정보 보호 기술](https://news.samsung.com/sg/your-privacy-secured-inside-the-tech-powering-safe-personalised-galaxy-ai-experiences),
+[How-To Geek: SafetyCore](https://www.howtogeek.com/google-is-not-scanning-all-the-images-on-your-android-phone/),
+[SecretScan (App Store)](https://apps.apple.com/us/app/secretscan-find-private-data/id6763880476)
+
+**규모 추정** (측정값이 아니다. 사진 2만 장 가정)
+
+| 단계 | 대상 | 장당 시간 (가정) | 합계 |
+|---|---|---|---|
+| 축소 디코딩과 가벼운 분류 (문서·신분증·화면 캡처처럼 보이는가) | 전체 2만 장 | 0.05초 | 약 17분 |
+| OCR | 후보 약 15% (3천 장) | 0.3초 | 약 15분 |
+| 텍스트에서 개인정보 패턴 검출 | OCR 결과 | 무시할 수준 | 수 초 |
+
+순수 연산은 한 시간 안쪽으로 추정한다. 충전 중에만 나눠 돌리면 하루이틀 밤에 끝난다. 장당 시간은 근거가
+약하다. 기기 내 OCR의 공신력 있는 측정값을 찾지 못했으므로 대상 기기에서 직접 재야 한다.
+
+**부하를 줄이는 설계**
+
+- **기존 분석 결과를 재사용한다.** 갤러리와 Personal Data Engine이 이미 뽑아 둔 태그와 텍스트가 있으면
+  그 위에서 패턴 검출만 한다. 4.3의 "새 스캐너를 만들지 않는다"는 방침과 같다. 재사용 가능한 범위는
+  확인이 필요하다(10장).
+- **단계적으로 걸러 낸다.** 가벼운 분류기로 후보를 추린 뒤에만 OCR을 돌린다.
+- **원본 대신 축소본을 쓴다.** 분류는 썸네일로 하고 OCR 단계에서만 해상도를 올린다.
+- **증분 처리한다.** MediaStore가 알려 주는 새 파일만 처리한다. 첫 스캔 이후의 부하는 하루 수십 장 수준이다.
+- **충전 중·화면 꺼짐 상태에서만 돈다.** Apple 사진 앱의 방식을 따른다.
+- **우선순위를 둔다.** 화면 캡처, 다운로드, 메신저 저장 폴더를 먼저 본다.
+
+**연산량보다 큰 문제**
+
+- 동영상은 프레임 단위 분석이 훨씬 무겁다. 초기에는 제외하거나 대표 프레임만 본다.
+- 원본이 클라우드에만 있고 기기에 축소본만 있는 사진은 OCR 정확도가 떨어진다.
+- 첫 스캔이 끝나기 전에는 결과가 불완전하다. 진행률을 표시하지 않으면 "이상 없음"이 잘못된 안심이 된다.
+- 놓치는 비율과 잘못 잡는 비율이 연산량보다 제품의 신뢰를 좌우한다.
+- "신분증 사진이 어디에 있다"는 색인은 그 자체로 민감하다. 3장의 원칙대로 격리된 저장소에 둔다.
+
 ### 4.4 화면을 읽는 에이전트의 처리
 
 화면 캡처·접근성 기반 에이전트는 화면에 뜨는 것은 무엇이든 볼 수 있어 접근 가능한 데이터를 열거할 수 없다.
