@@ -86,6 +86,26 @@ Gemini 4 Carbon과 3.8 Flash는 가격 인상이 예정되어 있다([4절](#4-g
   - 그 밖의 모델: 10%
 - Haiku 5.5의 10만 토큰 기준에는 캐시 읽기·쓰기 토큰도 포함된다.
 
+### 5분과 1시간은 누가 정하는가
+
+캐시 보관 시간(TTL)은 요청을 보내는 쪽이 요청마다 지정한다. Claude Code에서는 Claude Code가 자동으로 고르고, 사용자가 설정으로 바꿀 수 있다.
+
+| 요청 종류 | 구독 포함 사용량 안 | 사용 크레딧, API 키, 클라우드 제공사 |
+|---|---|---|
+| 메인 대화 | 1시간 | 5분 |
+| 그 밖의 요청(하위 에이전트, 컨텍스트 압축 등) | 5분 | 5분 |
+
+- 구독 포함 사용량 안에서는 토큰별 청구가 없으므로 1시간 캐시 쓰기 단가(2배)를 따로 내지 않는다.
+  한도를 넘어 사용 크레딧으로 넘어가면 Claude Code가 메인 대화를 5분으로 낮춘다.
+- 사용자가 바꾸려면 `promptCacheTtl` 설정이나 `CLAUDE_CODE_PROMPT_CACHE_TTL` 환경 변수에 `5m` 또는 `1h`를 넣는다.
+  하위 에이전트 등은 `subagentPromptCacheTtl` 설정이나 `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`로 따로 정한다.
+- API를 직접 호출할 때는 `cache_control`의 `ttl` 필드에 `"1h"`를 넣어야 1시간이 되고, 넣지 않으면 5분이다.
+- 캐시를 읽을 때마다 보관 시간이 추가 요금 없이 다시 시작된다.
+
+출처: [Claude Code 프롬프트 캐싱](https://code.claude.com/docs/en/prompt-caching.md),
+[Claude Code 환경 변수](https://code.claude.com/docs/en/env-vars.md),
+[Claude API 프롬프트 캐싱](https://platform.claude.com/docs/en/build-with-claude/prompt-caching.md)
+
 ### 단가를 바꾸는 조건
 
 - **긴 컨텍스트**: Claude 4.6 이후 모델은 100만 토큰 컨텍스트를 표준 단가로 쓴다. Haiku 5.5만 위 표처럼 단가가 오른다.
