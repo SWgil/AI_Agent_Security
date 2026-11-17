@@ -221,7 +221,7 @@ gpt-5.5와 gpt-5.4는 27.2만 토큰 초과 시 입력 2배, 출력 1.5배다(gp
 | Code Assist Standard·Enterprise 라이선스 | 일일 모델 요청 수 한도(1,500회·2,000회)에서 차감. 토큰별 청구 없음 |
 | 무료 Gemini API 키 | 하루 250회 요청, Flash 모델만. 무료 |
 | 유료 Gemini API 키 | 아래 단가로 토큰별 청구 |
-| Vertex AI | 토큰별 청구. Vertex AI 단가는 이 문서에서 따로 확인하지 않았다 |
+| Vertex AI | 토큰별 청구. 글로벌 엔드포인트의 Gemini 4 단가는 Gemini API와 같고, 그 밖의 리전은 약 10% 비싸다 ([Vertex AI 모델 가격](https://cloud.google.com/model-garden/pricing)) |
 
 개인 무료 사용자와 Google AI Pro·Ultra 구독자는 2026년 6월 18일에 Antigravity CLI로 이전되었다.
 
