@@ -1,5 +1,5 @@
 {
   "permissions": {
-    "ask": ["Bash(echo ask-test *)"]
+    "deny": ["Bash(echo deny-test *)"]
   }
 }
