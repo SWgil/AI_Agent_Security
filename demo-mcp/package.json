@@ -1,0 +1,11 @@
+{
+  "name": "demo-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "기능 없는 데모용 원격 MCP 서버 (Claude 커스텀 커넥터 연결 실험용)",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}
