@@ -1,0 +1,18 @@
+# What an app repository adds to get attested builds: one call to the trusted
+# builder. The build steps themselves are not in the app developer's hands.
+name: PoC attested build
+
+on:
+  push:
+    paths:
+      - "poc/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  attested:
+    uses: ./.github/workflows/attested-build.yml
