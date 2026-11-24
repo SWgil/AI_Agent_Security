@@ -126,6 +126,13 @@ enum class SignalKind {
 
     /** The build contacted a host that is not a well-known package source. Value: the host. */
     UNEXPECTED_BUILD_HOST,
+
+    /**
+     * The build contacted a host where anyone can publish files. Package
+     * registries redirect some downloads there, so this alone is not unusual,
+     * but the host says nothing about whose file was fetched. Value: the host.
+     */
+    SHARED_HOSTING_BUILD_HOST,
 }
 
 data class Signal(val kind: SignalKind, val severity: Severity, val value: String? = null)
@@ -152,6 +159,13 @@ object RepoSignals {
         "plugins-artifacts.gradle.org:443",
         "services.gradle.org:443",
         "downloads.gradle.org:443",
+    )
+
+    val SHARED_HOSTING_HOSTS = setOf(
+        "github.com:443",
+        "release-assets.githubusercontent.com:443",
+        "objects.githubusercontent.com:443",
+        "raw.githubusercontent.com:443",
     )
 
     fun assess(provenance: Provenance, lookup: RepoLookup, now: Instant): List<Signal> {
@@ -194,7 +208,11 @@ object RepoSignals {
             signals += Signal(SignalKind.BUILD_INPUTS_NOT_RECORDED, Severity.INFO)
         } else {
             buildHosts.filterNot { it in KNOWN_BUILD_HOSTS }.forEach {
-                signals += Signal(SignalKind.UNEXPECTED_BUILD_HOST, Severity.WARNING, it)
+                signals += if (it in SHARED_HOSTING_HOSTS) {
+                    Signal(SignalKind.SHARED_HOSTING_BUILD_HOST, Severity.INFO, it)
+                } else {
+                    Signal(SignalKind.UNEXPECTED_BUILD_HOST, Severity.WARNING, it)
+                }
             }
         }
         return signals

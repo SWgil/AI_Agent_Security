@@ -241,6 +241,9 @@ class MainActivity : Activity() {
         SignalKind.BRAND_KEYWORD -> "저장소 이름에 사칭에 자주 쓰이는 단어(${signal.value})가 있습니다."
         SignalKind.BUILD_INPUTS_NOT_RECORDED -> "빌드가 외부에서 무엇을 받아왔는지 기록되지 않았습니다."
         SignalKind.UNEXPECTED_BUILD_HOST -> "빌드 중 일반적인 패키지 저장소가 아닌 곳에 접속했습니다: ${signal.value}"
+        SignalKind.SHARED_HOSTING_BUILD_HOST ->
+            "빌드 중 누구나 파일을 올릴 수 있는 곳에 접속했습니다: ${signal.value?.removeSuffix(":443")}. " +
+                "패키지 저장소가 일부 파일을 이쪽으로 넘기기도 합니다."
     }
 
     private fun marker(severity: Severity) = when (severity) {

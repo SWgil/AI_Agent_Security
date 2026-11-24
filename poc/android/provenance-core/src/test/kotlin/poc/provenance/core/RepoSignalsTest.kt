@@ -85,6 +85,15 @@ class RepoSignalsTest {
     }
 
     @Test
+    fun `shared hosting contacted during the build is noted but not a warning`() {
+        val p = provenance.copy(buildHosts = listOf("repo.maven.apache.org:443", "github.com:443"))
+        assertEquals(
+            listOf(Signal(SignalKind.SHARED_HOSTING_BUILD_HOST, Severity.INFO, "github.com:443")),
+            RepoSignals.assess(p, RepoLookup.Found(established), now),
+        )
+    }
+
+    @Test
     fun `attestation without recorded inputs is noted`() {
         assertEquals(
             listOf(SignalKind.BUILD_INPUTS_NOT_RECORDED),

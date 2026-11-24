@@ -71,7 +71,7 @@ jobs:
 
       - name: Start the recording proxy
         run: |
-          nohup python poc/builder/record_proxy.py --port 3128 --log "$RUNNER_TEMP/hosts.log" --deny github.com:443 \
+          nohup python poc/builder/record_proxy.py --port 3128 --log "$RUNNER_TEMP/hosts.log" \
             > "$RUNNER_TEMP/proxy.out" 2>&1 &
           for i in $(seq 50); do
             (exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null && exit 0
@@ -99,8 +99,7 @@ jobs:
             | python -u -c 'import sys, time
           for line in sys.stdin:
               sys.stdout.write(time.strftime("%H:%M:%S ", time.gmtime()) + line)' > "$RUNNER_TEMP/build.log" \
-            || { grep -n -B5 -A40 -iE "github|what went wrong" "$RUNNER_TEMP/build.log" | cut -c1-400 | head -150; exit 1; }
-          grep -n -B8 -A25 -i "github" "$RUNNER_TEMP/build.log" | cut -c1-400 | head -150 || true
+            || { grep -n -A40 "What went wrong" "$RUNNER_TEMP/build.log" | cut -c1-400; exit 1; }
           tail -3 "$RUNNER_TEMP/build.log"
 
       - name: Collect what the build downloaded
