@@ -93,7 +93,8 @@ jobs:
           proxy="-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=3128 -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=3128"
           sudo -u builder env -i HOME=/home/builder PATH="$JAVA_HOME/bin:/usr/bin:/bin" \
             JAVA_HOME="$JAVA_HOME" ANDROID_HOME="$ANDROID_HOME" JAVA_TOOL_OPTIONS="$proxy" \
-            "$GRADLE_BIN" --no-daemon --project-dir /home/builder/src :sample:assembleRelease :verifier:assembleRelease
+            GRADLE_BIN="$GRADLE_BIN" \
+            bash -c 'cd /home/builder/src && "$GRADLE_BIN" --no-daemon :sample:assembleRelease :verifier:assembleRelease'
 
       - name: Collect what the build downloaded
         run: |
