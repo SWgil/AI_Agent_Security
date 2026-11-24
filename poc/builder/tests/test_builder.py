@@ -9,7 +9,7 @@ import collect_inputs  # noqa: E402
 import record_proxy  # noqa: E402
 
 
-def _run_through_proxy(request):
+def _run_through_proxy(request, deny_target=False):
     """Send one request to the proxy; return (response bytes, recorded lines)."""
 
     async def scenario():
@@ -21,8 +21,9 @@ def _run_through_proxy(request):
         target = await asyncio.start_server(echo, "127.0.0.1", 0)
         target_port = target.sockets[0].getsockname()[1]
         recorded = []
+        deny = {f"127.0.0.1:{target_port}"} if deny_target else set()
         proxy = await asyncio.start_server(
-            lambda r, w: record_proxy.handle(r, w, recorded.append), "127.0.0.1", 0
+            lambda r, w: record_proxy.handle(r, w, recorded.append, deny), "127.0.0.1", 0
         )
         reader, writer = await asyncio.open_connection("127.0.0.1", proxy.sockets[0].getsockname()[1])
         writer.write(request(target_port))
@@ -41,6 +42,14 @@ def test_connect_is_tunnelled_and_recorded():
         lambda p: f"CONNECT 127.0.0.1:{p} HTTP/1.1\r\nHost: x\r\n\r\nhello".encode()
     )
     assert response == b"HTTP/1.1 200 Connection Established\r\n\r\necho:hello"
+    assert recorded == [f"127.0.0.1:{port}"]
+
+
+def test_denied_target_is_refused_and_recorded():
+    response, recorded, port = _run_through_proxy(
+        lambda p: f"CONNECT 127.0.0.1:{p} HTTP/1.1\r\n\r\nhello".encode(), deny_target=True
+    )
+    assert response.startswith(b"HTTP/1.1 403")
     assert recorded == [f"127.0.0.1:{port}"]
 
 

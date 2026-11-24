@@ -30,7 +30,7 @@ async def _reply(writer, status):
     writer.close()
 
 
-async def handle(reader, writer, record):
+async def handle(reader, writer, record, deny=()):
     try:
         head = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=30)
     except (asyncio.IncompleteReadError, asyncio.LimitOverrunError, asyncio.TimeoutError, OSError):
@@ -50,6 +50,9 @@ async def handle(reader, writer, record):
 
     host, _, port = target.rpartition(":")
     record(target.lower())
+    if target.lower() in deny:
+        await _reply(writer, "403 Host Is Denied By The Builder")
+        return
     try:
         upstream_reader, upstream_writer = await asyncio.open_connection(host, int(port))
     except (OSError, ValueError):
@@ -60,7 +63,7 @@ async def handle(reader, writer, record):
     await asyncio.gather(_pipe(reader, upstream_writer), _pipe(upstream_reader, writer))
 
 
-async def serve(port, log_path):
+async def serve(port, log_path, deny=()):
     log = open(log_path, "a", buffering=1)
 
     def record(target):
@@ -68,7 +71,7 @@ async def serve(port, log_path):
         now = datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M:%S")
         log.write(f"{now} {target}\n")
 
-    server = await asyncio.start_server(lambda r, w: handle(r, w, record), "127.0.0.1", port)
+    server = await asyncio.start_server(lambda r, w: handle(r, w, record, deny), "127.0.0.1", port)
     async with server:
         await server.serve_forever()
 
@@ -77,5 +80,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--port", type=int, default=3128)
     parser.add_argument("--log", required=True)
+    parser.add_argument("--deny", action="append", default=[], metavar="HOST:PORT",
+                        help="refuse (but still record) connections to this target; may be repeated")
     args = parser.parse_args()
-    asyncio.run(serve(args.port, args.log))
+    asyncio.run(serve(args.port, args.log, {d.lower() for d in args.deny}))
