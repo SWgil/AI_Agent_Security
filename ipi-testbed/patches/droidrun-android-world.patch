@@ -1,0 +1,13 @@
+diff --git a/eval/portal/keepalive.py b/eval/portal/keepalive.py
+index d8021b4..555235a 100644
+--- a/eval/portal/keepalive.py
++++ b/eval/portal/keepalive.py
+@@ -60,3 +60,8 @@ class KeepOverlayDisabled:
+ 
+     def __exit__(self, exc_type, exc_value, traceback):
+         self.stop()
++
++
++def disable_overlay_once(device):
++    """Disable the DroidRun Portal overlay a single time."""
++    toggle_overlay(device, False)
