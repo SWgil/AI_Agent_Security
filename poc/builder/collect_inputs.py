@@ -42,7 +42,8 @@ def collect(gradle_home, hosts_log, toolchain=()):
     hosts = set()
     log = pathlib.Path(hosts_log)
     if log.exists():
-        hosts = {line.strip() for line in log.read_text().splitlines() if line.strip()}
+        # Each line is "<time> <target>".
+        hosts = {line.split()[-1] for line in log.read_text().splitlines() if line.strip()}
     return {"networkHosts": sorted(hosts), "artifacts": artifacts}
 
 

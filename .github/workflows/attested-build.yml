@@ -85,16 +85,22 @@ jobs:
             echo "direct connection succeeded: isolation is not working"; exit 1
           fi
           sudo -u builder curl -fsS -m 20 -o /dev/null -x http://127.0.0.1:3128 https://example.com
-          grep -x "example.com:443" "$RUNNER_TEMP/hosts.log"
+          grep " example.com:443$" "$RUNNER_TEMP/hosts.log"
           : > "$RUNNER_TEMP/hosts.log"
 
       - name: Build the APKs as the isolated user
         run: |
+          set -o pipefail
           proxy="-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=3128 -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=3128"
           sudo -u builder env -i HOME=/home/builder PATH="$JAVA_HOME/bin:/usr/bin:/bin" \
             JAVA_HOME="$JAVA_HOME" ANDROID_HOME="$ANDROID_HOME" JAVA_TOOL_OPTIONS="$proxy" \
             GRADLE_BIN="$GRADLE_BIN" \
-            bash -c 'cd /home/builder/src && "$GRADLE_BIN" --no-daemon :sample:assembleRelease :verifier:assembleRelease'
+            bash -c 'cd /home/builder/src && "$GRADLE_BIN" --no-daemon --info --console=plain :sample:assembleRelease :verifier:assembleRelease' 2>&1 \
+            | python -u -c 'import sys, time
+          for line in sys.stdin:
+              sys.stdout.write(time.strftime("%H:%M:%S ", time.gmtime()) + line)' > "$RUNNER_TEMP/build.log" \
+            || { tail -60 "$RUNNER_TEMP/build.log"; exit 1; }
+          tail -3 "$RUNNER_TEMP/build.log"
 
       - name: Collect what the build downloaded
         run: |
@@ -102,6 +108,8 @@ jobs:
           sudo python poc/builder/collect_inputs.py --gradle-home /home/builder/.gradle \
             --hosts-log "$RUNNER_TEMP/hosts.log" --toolchain "$GRADLE_ZIP" --out "$RUNNER_TEMP/inputs.json"
           cp "$RUNNER_TEMP/inputs.json" dist/build-inputs.json
+          cp "$RUNNER_TEMP/build.log" dist/build.log
+          cp "$RUNNER_TEMP/hosts.log" dist/network.log
 
       - name: Attest the APKs
         run: |

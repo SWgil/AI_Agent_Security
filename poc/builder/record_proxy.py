@@ -9,6 +9,7 @@ refused and logged.
 
 import argparse
 import asyncio
+import datetime
 import urllib.parse
 
 
@@ -61,9 +62,13 @@ async def handle(reader, writer, record):
 
 async def serve(port, log_path):
     log = open(log_path, "a", buffering=1)
-    server = await asyncio.start_server(
-        lambda r, w: handle(r, w, lambda line: log.write(line + "\n")), "127.0.0.1", port
-    )
+
+    def record(target):
+        # "<UTC time> <target>"; the time lets a host be matched to a build step.
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%H:%M:%S")
+        log.write(f"{now} {target}\n")
+
+    server = await asyncio.start_server(lambda r, w: handle(r, w, record), "127.0.0.1", port)
     async with server:
         await server.serve_forever()
 

@@ -67,7 +67,9 @@ def test_collect_lists_gradle_downloads_and_hosts(tmp_path):
     dist = tmp_path / "gradle-8.14.3-bin.zip"
     dist.write_bytes(b"zip-bytes")
     log = tmp_path / "hosts.log"
-    log.write_text("repo.maven.apache.org:443\ndl.google.com:443\nrepo.maven.apache.org:443\n")
+    log.write_text(
+        "01:02:03 repo.maven.apache.org:443\n01:02:04 dl.google.com:443\n01:02:09 repo.maven.apache.org:443\n"
+    )
 
     inputs = collect_inputs.collect(tmp_path, log, [dist])
     assert inputs["networkHosts"] == ["dl.google.com:443", "repo.maven.apache.org:443"]
