@@ -54,6 +54,21 @@ jobs:
           sudo cp -r poc/android /home/builder/src
           sudo chown -R builder: /home/builder/src
 
+      # The builder supplies Gradle itself: the official distribution of the
+      # version the project asks for. The wrapper jar and download URL in the
+      # repository are not used, since both are under the developer's control.
+      - name: Provide the Gradle distribution
+        run: |
+          version=$(sed -nE 's#^distributionUrl=https\\://services\.gradle\.org/distributions/gradle-([0-9]+(\.[0-9]+){1,2})-bin\.zip$#\1#p' \
+            poc/android/gradle/wrapper/gradle-wrapper.properties)
+          [ -n "$version" ] || { echo "distributionUrl is not an official Gradle release"; exit 1; }
+          zip="$RUNNER_TEMP/gradle-$version-bin.zip"
+          curl -fsSL -o "$zip" "https://services.gradle.org/distributions/gradle-$version-bin.zip"
+          echo "$(curl -fsSL "https://services.gradle.org/distributions/gradle-$version-bin.zip.sha256")  $zip" | sha256sum -c -
+          sudo unzip -q "$zip" -d /opt/builder-gradle
+          echo "GRADLE_ZIP=$zip" >> "$GITHUB_ENV"
+          echo "GRADLE_BIN=/opt/builder-gradle/gradle-$version/bin/gradle" >> "$GITHUB_ENV"
+
       - name: Start the recording proxy
         run: |
           nohup python poc/builder/record_proxy.py --port 3128 --log "$RUNNER_TEMP/hosts.log" \
@@ -78,13 +93,13 @@ jobs:
           proxy="-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=3128 -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=3128"
           sudo -u builder env -i HOME=/home/builder PATH="$JAVA_HOME/bin:/usr/bin:/bin" \
             JAVA_HOME="$JAVA_HOME" ANDROID_HOME="$ANDROID_HOME" JAVA_TOOL_OPTIONS="$proxy" \
-            bash -c 'cd /home/builder/src && ./gradlew --no-daemon :sample:assembleRelease :verifier:assembleRelease'
+            "$GRADLE_BIN" --no-daemon --project-dir /home/builder/src :sample:assembleRelease :verifier:assembleRelease
 
       - name: Collect what the build downloaded
         run: |
           mkdir -p dist
           sudo python poc/builder/collect_inputs.py --gradle-home /home/builder/.gradle \
-            --hosts-log "$RUNNER_TEMP/hosts.log" --out "$RUNNER_TEMP/inputs.json"
+            --hosts-log "$RUNNER_TEMP/hosts.log" --toolchain "$GRADLE_ZIP" --out "$RUNNER_TEMP/inputs.json"
           cp "$RUNNER_TEMP/inputs.json" dist/build-inputs.json
 
       - name: Attest the APKs

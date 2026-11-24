@@ -64,17 +64,16 @@ def test_collect_lists_gradle_downloads_and_hosts(tmp_path):
     jar = tmp_path / "caches/modules-2/files-2.1/org.example/lib/1.2/abc123/lib-1.2.jar"
     jar.parent.mkdir(parents=True)
     jar.write_bytes(b"jar-bytes")
-    dist = tmp_path / "wrapper/dists/gradle-8.14.3-bin/xyz/gradle-8.14.3-bin.zip"
-    dist.parent.mkdir(parents=True)
+    dist = tmp_path / "gradle-8.14.3-bin.zip"
     dist.write_bytes(b"zip-bytes")
     log = tmp_path / "hosts.log"
     log.write_text("repo.maven.apache.org:443\ndl.google.com:443\nrepo.maven.apache.org:443\n")
 
-    inputs = collect_inputs.collect(tmp_path, log)
+    inputs = collect_inputs.collect(tmp_path, log, [dist])
     assert inputs["networkHosts"] == ["dl.google.com:443", "repo.maven.apache.org:443"]
     assert inputs["artifacts"] == [
         {"name": "org.example:lib:1.2/lib-1.2.jar", "sha256": hashlib.sha256(b"jar-bytes").hexdigest()},
-        {"name": "gradle-distribution/gradle-8.14.3-bin.zip", "sha256": hashlib.sha256(b"zip-bytes").hexdigest()},
+        {"name": "toolchain/gradle-8.14.3-bin.zip", "sha256": hashlib.sha256(b"zip-bytes").hexdigest()},
     ]
 
 

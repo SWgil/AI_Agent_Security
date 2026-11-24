@@ -11,11 +11,12 @@ APK가 **어느 GitHub 저장소의 어느 커밋에서 빌드됐는지**를 증
 ```
 GitHub Actions (신뢰 빌더 워크플로)                       폰 (검증 앱)
 ┌──────────────────────────────────────────┐            ┌────────────────────────────┐
-│ 1. 소스 체크아웃, APK 빌드·서명          │            │ 5. APK에서 증명서를 꺼내   │
-│ 2. GitHub에 빌드 신원 토큰(OIDC) 요청    │   APK      │    발급자 서명 확인        │
-│ 3. 토큰 검증 → 저장소·커밋·워크플로 확인 │ ────────▶  │ 6. APK 내용·서명 키 대조   │
-│ 4. 가짜 삼성 키로 증명서 서명,           │            │ 7. 저장소 현재 상태 조회   │
-│    APK 서명 블록에 삽입                  │            │ 8. 결과 표시 후 설치       │
+│ 1. 격리된 사용자로 APK 빌드·서명,        │            │ 5. APK에서 증명서를 꺼내   │
+│    빌드가 받아오는 것을 기록             │            │    발급자 서명 확인        │
+│ 2. GitHub에 빌드 신원 토큰(OIDC) 요청    │   APK      │ 6. APK 내용·서명 키 대조   │
+│ 3. 토큰 검증 → 저장소·커밋·워크플로 확인 │ ────────▶  │ 7. 저장소 현재 상태 조회   │
+│ 4. 가짜 삼성 키로 증명서 서명,           │            │ 8. 결과 표시 후 설치       │
+│    APK 서명 블록에 삽입                  │            │                            │
 └──────────────────────────────────────────┘            └────────────────────────────┘
 ```
 
@@ -23,6 +24,8 @@ GitHub Actions (신뢰 빌더 워크플로)                       폰 (검증 �
 |---|---|
 | `.github/workflows/attested-build.yml` | 신뢰 빌더. 발급자가 소유한다고 가정하는 재사용 워크플로 |
 | `.github/workflows/poc-build.yml` | 앱 저장소가 추가하는 부분. 신뢰 빌더를 호출하는 몇 줄 |
+| `builder/record_proxy.py` | 빌드가 접속하는 호스트를 기록하는 프록시 |
+| `builder/collect_inputs.py` | 빌드가 받아온 파일의 해시를 모은다 |
 | `signer/attest.py` | 가짜 삼성 발급자. OIDC 토큰을 검증하고 증명서를 서명해 APK에 넣는다 |
 | `signer/verify.py` | 검증 로직의 Python 참조 구현 |
 | `signer/apkblock.py` | APK 서명 블록 읽기·쓰기, 내용 해시 계산 |
@@ -40,7 +43,8 @@ GitHub Actions (신뢰 빌더 워크플로)                       폰 (검증 �
   "type": "mock-samsung-provenance/v1",
   "subject": { "contentDigest": "sha256:…", "signerCertDigest": "sha256:…" },
   "source":  { "repository": "owner/repo", "repositoryId": "…", "ownerId": "…", "commit": "…" },
-  "build":   { "workflowRef": "…/attested-build.yml@…", "runnerEnvironment": "github-hosted" }
+  "build":   { "workflowRef": "…/attested-build.yml@…", "runnerEnvironment": "github-hosted" },
+  "inputs":  { "networkHosts": ["dl.google.com:443", "…"], "artifactCount": 393, "artifactsDigest": "sha256:…" }
 }
 ```
 
@@ -49,11 +53,35 @@ GitHub Actions (신뢰 빌더 워크플로)                       폰 (검증 �
 - `repositoryId`, `ownerId`: GitHub가 부여한 숫자 ID. 이름은 계정 삭제 후 다른 사람이 다시 가져갈 수
   있어서, 신뢰 등록과 상태 조회는 ID 기준으로 한다.
 
+- `inputs`: 빌드가 저장소 밖에서 받아온 것의 기록. 아래 "빌드 입력 기록" 참고.
+
 발급자는 다음 조건을 만족할 때만 서명한다.
 
 - GitHub가 서명한 OIDC 토큰이 유효하다.
 - GitHub 제공 러너에서 빌드됐다 (`runner_environment == github-hosted`).
 - 신뢰 빌더 워크플로 안에서 실행됐다 (`job_workflow_ref`가 지정한 경로로 시작).
+
+## 빌드 입력 기록
+
+같은 커밋이라도 빌드가 외부에서 받아오는 파일이 바뀌면 다른 APK가 나온다. 이를 막지는 않되,
+각 APK에 무엇이 들어갔는지 남긴다.
+
+- 앱의 빌드 스크립트는 개발자가 쓴 코드이므로, 별도 사용자(`builder`)로 실행한다. 이 사용자는
+  빌드 신원 토큰이 없고, 워크플로의 체크아웃을 고칠 수 없고, 방화벽 규칙 때문에 기록용 프록시를
+  거치지 않으면 네트워크에 나갈 수 없다.
+- 프록시는 접속한 호스트를 기록한다. HTTPS를 풀어 보지는 않으므로 내용은 모른다. 평문 HTTP는
+  거절하고 기록한다.
+- 빌드 사용자의 Gradle 캐시는 비어 있는 상태로 시작하므로, 빌드 후 캐시에 있는 파일이 곧 이번
+  빌드가 받아온 파일이다. 전부 해시를 계산한다.
+- Gradle 자체는 빌더가 공식 배포본을 받아 체크섬을 확인한 뒤 제공한다. 저장소에 들어 있는 래퍼
+  바이너리와 다운로드 주소는 쓰지 않는다.
+- 증명서에는 호스트 목록, 파일 수, 파일 목록의 해시가 들어간다. 전체 파일 목록은
+  `build-inputs.json`으로 아티팩트에 함께 올라간다.
+
+검증 앱은 접속한 호스트를 보여 주고, 일반적인 패키지 저장소가 아닌 곳이 있으면 경고한다.
+
+한계: Gradle의 의존성 해석을 거치지 않고 받아온 파일(빌드 스크립트가 직접 내려받는 경우)은
+호스트만 남고 내용의 해시는 남지 않는다. 그리고 기록은 변경을 **알 수 있게** 할 뿐 막지 않는다.
 
 ## 검증 앱의 판정
 
@@ -65,13 +93,14 @@ GitHub Actions (신뢰 빌더 워크플로)                       폰 (검증 �
 | 신뢰 등록된 저장소 | 사용자가 등록해 둔 저장소 | 바로 설치 |
 
 출처가 확인되면 저장소의 현재 상태를 조회해 다음을 표시한다: 저장소 삭제·비공개 전환, 소유 계정 변경,
-이름 변경, 30일 미만의 새 저장소, 90일 미만의 새 계정, 포크 여부와 원본, 사칭에 자주 쓰이는 단어.
+이름 변경, 30일 미만의 새 저장소, 90일 미만의 새 계정, 포크 여부와 원본, 사칭에 자주 쓰이는 단어,
+빌드 중 접속한 낯선 호스트.
 소유 계정이 바뀌었거나 저장소가 사라진 경우에는 등록된 저장소라도 미등록으로 취급한다.
 
 ## 써 보기
 
 1. 이 브랜치에 푸시하면 `PoC attested build` 워크플로가 돈다. 실행 결과의 `attested-apks`
-   아티팩트에 `verifier-attested.apk`와 `sample-attested.apk`가 들어 있다.
+   아티팩트에 `verifier-attested.apk`, `sample-attested.apk`, `build-inputs.json`이 들어 있다.
 2. 폰에 `verifier-attested.apk`를 설치한다 (이 앱 자체는 일반적인 방법으로 설치해야 한다).
 3. 검증 앱에서 **APK 선택**으로 `sample-attested.apk`를 고르거나, 파일 관리자에서 APK를
    이 앱으로 연다.
@@ -81,13 +110,13 @@ GitHub Actions (신뢰 빌더 워크플로)                       폰 (검증 �
 
 ```sh
 pip install pyjwt cryptography pytest
-python -m pytest poc/signer/tests          # 서명 도구 단위 테스트
+python -m pytest poc/signer/tests poc/builder/tests   # 서명·빌더 도구 단위 테스트
 cd poc/android && ./gradlew :provenance-core:test   # 검증 로직 단위 테스트
 ANDROID_HOME=… poc/e2e.sh                  # 실제 APK로 전 과정 확인
 ```
 
 `e2e.sh`는 GitHub 밖에서 도므로 OIDC 토큰 대신 `signer/local-claims.example.json`의 검증되지 않은
-값을 쓴다 (`--insecure-claims-file`). 증명서 형식과 검증 경로만 확인하는 용도다.
+값을 쓴다 (`--insecure-claims-file`). 증명서 형식과 검증 경로만 확인하는 용도다. 격리 빌드와 입력 기록은 워크플로에서만 돈다.
 
 ## 실제 시스템과 다른 점
 
@@ -102,6 +131,8 @@ ANDROID_HOME=… poc/e2e.sh                  # 실제 APK로 전 과정 확인
 | 신뢰 목록이 기기 안에만 있고, 저장소 단위로만 등록한다 | 계정 단위 등록, 기기 간 동기화, 가족·조직 공유 목록 |
 | 증명서 폐기와 악성 저장소 차단 목록이 없다 | 발급자가 폐기 목록과 차단 목록을 운영한다 |
 | 발급 기록을 남기지 않는다 | 공개 투명성 로그에 기록한다 |
-| 빌드가 외부에서 받아오는 의존성은 검사하지 않는다 | 의존성 고정, 재현 가능한 빌드로 보완한다 |
+| 빌드 입력을 기록만 한다. 전체 목록은 실행 아티팩트로만 남는다 | 목록을 투명성 로그에 보관하고, 높은 등급에는 해시 고정과 네트워크 차단을 요구한다 |
+| 빌드와 발급이 같은 작업 안에서 사용자만 달리해 돈다 | 빌드와 발급을 별도 작업·별도 환경으로 나눈다 |
+| 워크플로가 쓰는 액션과 pip 패키지를 해시로 고정하지 않았다 | 빌더 자신의 입력도 전부 고정한다 |
 
 증명서는 **출처만** 말한다. 그 저장소의 코드가 안전한지는 말하지 않는다.

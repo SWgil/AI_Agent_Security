@@ -24,7 +24,7 @@ def _sha256(path):
     return h.hexdigest()
 
 
-def collect(gradle_home, hosts_log):
+def collect(gradle_home, hosts_log, toolchain=()):
     gradle_home = pathlib.Path(gradle_home)
     artifacts = []
 
@@ -35,8 +35,9 @@ def collect(gradle_home, hosts_log):
             group, name, version, _sha1, filename = path.relative_to(modules).parts
             artifacts.append({"name": f"{group}:{name}:{version}/{filename}", "sha256": _sha256(path)})
 
-    for path in sorted((gradle_home / "wrapper" / "dists").glob("*/*/*.zip")):
-        artifacts.append({"name": f"gradle-distribution/{path.name}", "sha256": _sha256(path)})
+    # Tools the builder supplied itself, such as the Gradle distribution.
+    for path in map(pathlib.Path, toolchain):
+        artifacts.append({"name": f"toolchain/{path.name}", "sha256": _sha256(path)})
 
     hosts = set()
     log = pathlib.Path(hosts_log)
@@ -49,9 +50,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--gradle-home", required=True)
     parser.add_argument("--hosts-log", required=True)
+    parser.add_argument("--toolchain", action="append", default=[],
+                        help="file the builder supplied to the build; may be repeated")
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
-    inputs = collect(args.gradle_home, args.hosts_log)
+    inputs = collect(args.gradle_home, args.hosts_log, args.toolchain)
     with open(args.out, "w") as f:
         json.dump(inputs, f, indent=1)
     print(f"{len(inputs['artifacts'])} artifacts, hosts: {', '.join(inputs['networkHosts']) or '(none)'}")
