@@ -13,6 +13,7 @@ class RepoSignalsTest {
         repository = "alice/notes-app", repositoryId = "1001", owner = "alice", ownerId = "2002",
         visibility = "public", commit = "a".repeat(40), ref = "refs/heads/main",
         workflowRef = "", runnerEnvironment = "github-hosted", runUrl = "",
+        buildHosts = listOf("repo.maven.apache.org:443", "dl.google.com:443"), inputArtifactCount = 2,
     )
     private val established = RepoInfo(
         fullName = "alice/notes-app", ownerId = "2002",
@@ -71,6 +72,23 @@ class RepoSignalsTest {
         assertEquals(
             listOf(SignalKind.NOT_PUBLIC, SignalKind.BRAND_KEYWORD),
             kinds(RepoLookup.Found(established.copy(fullName = "kb-bank-official/kbstar")), p),
+        )
+    }
+
+    @Test
+    fun `build that contacted an unusual host is flagged with that host`() {
+        val p = provenance.copy(buildHosts = listOf("repo.maven.apache.org:443", "files.attacker.example:443"))
+        assertEquals(
+            listOf(Signal(SignalKind.UNEXPECTED_BUILD_HOST, Severity.WARNING, "files.attacker.example:443")),
+            RepoSignals.assess(p, RepoLookup.Found(established), now),
+        )
+    }
+
+    @Test
+    fun `attestation without recorded inputs is noted`() {
+        assertEquals(
+            listOf(SignalKind.BUILD_INPUTS_NOT_RECORDED),
+            kinds(RepoLookup.Found(established), provenance.copy(buildHosts = null)),
         )
     }
 

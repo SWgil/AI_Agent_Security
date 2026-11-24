@@ -120,6 +120,12 @@ enum class SignalKind {
 
     /** The name contains a brand often impersonated by phishing. Value: the keyword. */
     BRAND_KEYWORD,
+
+    /** The attestation does not say what the build downloaded. */
+    BUILD_INPUTS_NOT_RECORDED,
+
+    /** The build contacted a host that is not a well-known package source. Value: the host. */
+    UNEXPECTED_BUILD_HOST,
 }
 
 data class Signal(val kind: SignalKind, val severity: Severity, val value: String? = null)
@@ -132,6 +138,20 @@ object RepoSignals {
     private val BRAND_KEYWORDS = listOf(
         "bank", "samsung", "kakao", "naver", "toss", "shinhan", "kbstar", "wooribank",
         "nonghyup", "police", "gov", "postoffice", "cjlogistics",
+    )
+
+    /**
+     * Package registries and toolchain hosts an ordinary Gradle build uses.
+     * Illustrative; a real issuer would maintain this as policy.
+     */
+    val KNOWN_BUILD_HOSTS = setOf(
+        "repo.maven.apache.org:443",
+        "dl.google.com:443",
+        "maven.google.com:443",
+        "plugins.gradle.org:443",
+        "plugins-artifacts.gradle.org:443",
+        "services.gradle.org:443",
+        "downloads.gradle.org:443",
     )
 
     fun assess(provenance: Provenance, lookup: RepoLookup, now: Instant): List<Signal> {
@@ -168,6 +188,14 @@ object RepoSignals {
         val name = provenance.repository.lowercase()
         BRAND_KEYWORDS.firstOrNull { it in name }?.let {
             signals += Signal(SignalKind.BRAND_KEYWORD, Severity.WARNING, it)
+        }
+        val buildHosts = provenance.buildHosts
+        if (buildHosts == null) {
+            signals += Signal(SignalKind.BUILD_INPUTS_NOT_RECORDED, Severity.INFO)
+        } else {
+            buildHosts.filterNot { it in KNOWN_BUILD_HOSTS }.forEach {
+                signals += Signal(SignalKind.UNEXPECTED_BUILD_HOST, Severity.WARNING, it)
+            }
         }
         return signals
     }

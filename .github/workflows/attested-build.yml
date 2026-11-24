@@ -38,17 +38,62 @@ jobs:
       - name: Test the signer
         run: python -m pytest -q poc/signer/tests
 
-      - name: Build the APKs and test the verifier core
-        working-directory: poc/android
-        run: ./gradlew --no-daemon :provenance-core:test :sample:assembleRelease :verifier:assembleRelease
+      - name: Test the builder tools
+        run: python -m pytest -q poc/builder/tests
+
+      # The app's build scripts are code written by the app developer. They run
+      # as a separate user that has no token, cannot write to this checkout,
+      # and can reach the network only through the recording proxy.
+      - name: Set up an isolated build user
+        run: |
+          sudo useradd --create-home builder
+          for cmd in iptables ip6tables; do
+            sudo $cmd -A OUTPUT -m owner --uid-owner builder -o lo -j ACCEPT
+            sudo $cmd -A OUTPUT -m owner --uid-owner builder -j REJECT
+          done
+          sudo cp -r poc/android /home/builder/src
+          sudo chown -R builder: /home/builder/src
+
+      - name: Start the recording proxy
+        run: |
+          nohup python poc/builder/record_proxy.py --port 3128 --log "$RUNNER_TEMP/hosts.log" \
+            > "$RUNNER_TEMP/proxy.out" 2>&1 &
+          for i in $(seq 50); do
+            (exec 3<>/dev/tcp/127.0.0.1/3128) 2>/dev/null && exit 0
+            sleep 0.2
+          done
+          cat "$RUNNER_TEMP/proxy.out"; exit 1
+
+      - name: Check that the build user cannot bypass the proxy
+        run: |
+          if sudo -u builder curl -sS -m 10 -o /dev/null https://example.com; then
+            echo "direct connection succeeded: isolation is not working"; exit 1
+          fi
+          sudo -u builder curl -fsS -m 20 -o /dev/null -x http://127.0.0.1:3128 https://example.com
+          grep -x "example.com:443" "$RUNNER_TEMP/hosts.log"
+          : > "$RUNNER_TEMP/hosts.log"
+
+      - name: Build the APKs as the isolated user
+        run: |
+          proxy="-Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=3128 -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=3128"
+          sudo -u builder env -i HOME=/home/builder PATH="$JAVA_HOME/bin:/usr/bin:/bin" \
+            JAVA_HOME="$JAVA_HOME" ANDROID_HOME="$ANDROID_HOME" JAVA_TOOL_OPTIONS="$proxy" \
+            bash -c 'cd /home/builder/src && ./gradlew --no-daemon :sample:assembleRelease :verifier:assembleRelease'
+
+      - name: Collect what the build downloaded
+        run: |
+          mkdir -p dist
+          sudo python poc/builder/collect_inputs.py --gradle-home /home/builder/.gradle \
+            --hosts-log "$RUNNER_TEMP/hosts.log" --out "$RUNNER_TEMP/inputs.json"
+          cp "$RUNNER_TEMP/inputs.json" dist/build-inputs.json
 
       - name: Attest the APKs
         run: |
-          mkdir -p dist
           for module in sample verifier; do
-            python poc/signer/attest.py \
-              "poc/android/$module/build/outputs/apk/release/$module-release.apk" \
+            sudo cat "/home/builder/src/$module/build/outputs/apk/release/$module-release.apk" > "$RUNNER_TEMP/$module.apk"
+            python poc/signer/attest.py "$RUNNER_TEMP/$module.apk" \
               --out "dist/$module-attested.apk" \
+              --inputs "$RUNNER_TEMP/inputs.json" \
               --trusted-workflow-prefix "${{ github.repository }}/.github/workflows/attested-build.yml@"
           done
 
@@ -75,4 +120,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: attested-apks
-          path: dist/*.apk
+          path: dist/

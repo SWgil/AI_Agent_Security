@@ -82,6 +82,25 @@ def test_verify_returns_source_claims(key):
     assert statement["source"]["commit"] == "a" * 40
 
 
+def test_recorded_inputs_are_summarized_in_the_statement(key):
+    inputs = {
+        "networkHosts": ["repo.maven.apache.org:443", "dl.google.com:443"],
+        "artifacts": [{"name": "org.example:lib:1.2/lib-1.2.jar", "sha256": "ab" * 32}],
+    }
+    attested, _ = attest.attest_apk(make_apk(), CLAIMS, key, inputs=inputs)
+    recorded = verify.verify_apk(attested, key.public_key())["inputs"]
+    assert recorded["networkHosts"] == ["dl.google.com:443", "repo.maven.apache.org:443"]
+    assert recorded["artifactCount"] == 1
+
+    changed = dict(inputs, artifacts=[{"name": "org.example:lib:1.2/lib-1.2.jar", "sha256": "cd" * 32}])
+    assert attest.summarize_inputs(changed)["artifactsDigest"] != recorded["artifactsDigest"]
+
+
+def test_statement_without_recorded_inputs_has_no_inputs_field(key):
+    attested, _ = attest.attest_apk(make_apk(), CLAIMS, key)
+    assert "inputs" not in verify.verify_apk(attested, key.public_key())
+
+
 def test_unattested_apk_has_no_attestation(key):
     assert verify.verify_apk(make_apk(), key.public_key()) is None
 

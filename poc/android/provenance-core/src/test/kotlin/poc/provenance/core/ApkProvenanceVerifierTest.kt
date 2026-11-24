@@ -31,6 +31,8 @@ class ApkProvenanceVerifierTest {
         assertEquals("1001", provenance.repositoryId)
         assertEquals("2002", provenance.ownerId)
         assertEquals("a".repeat(40), provenance.commit)
+        assertEquals(listOf("dl.google.com:443", "repo.maven.apache.org:443"), provenance.buildHosts)
+        assertEquals(312, provenance.inputArtifactCount)
         ZipFile(apk).use { assertEquals("hello", it.getInputStream(it.getEntry("classes.dex")).reader().readText()) }
     }
 
@@ -138,6 +140,10 @@ class ApkProvenanceVerifierTest {
                 .put("workflowRef", "issuer/builder/.github/workflows/attested-build.yml@refs/heads/main")
                 .put("runnerEnvironment", "github-hosted")
                 .put("runUrl", "https://github.com/alice/notes-app/actions/runs/42"))
+            .put("inputs", JSONObject()
+                .put("networkHosts", org.json.JSONArray(listOf("dl.google.com:443", "repo.maven.apache.org:443")))
+                .put("artifactCount", 312)
+                .put("artifactsDigest", "sha256:" + "0".repeat(64)))
         val payload = statement.toString().toByteArray()
         val signature = Signature.getInstance("SHA256withECDSA").run {
             initSign(issuer.private)

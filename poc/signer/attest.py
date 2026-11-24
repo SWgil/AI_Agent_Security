@@ -76,10 +76,24 @@ def check_policy(claims, trusted_workflow_prefix):
         )
 
 
-def build_statement(claims, apk_bytes, now=None):
+def summarize_inputs(inputs):
+    """Reduce the recorded build inputs to what goes into the statement.
+
+    The hosts are listed in full. The artifact list can run to hundreds of
+    entries, so the statement carries its digest and the issuer keeps the list.
+    """
+    canonical = json.dumps(inputs["artifacts"], sort_keys=True, separators=(",", ":"))
+    return {
+        "networkHosts": sorted(inputs["networkHosts"]),
+        "artifactCount": len(inputs["artifacts"]),
+        "artifactsDigest": "sha256:" + hashlib.sha256(canonical.encode()).hexdigest(),
+    }
+
+
+def build_statement(claims, apk_bytes, now=None, inputs=None):
     now = now or datetime.datetime.now(datetime.timezone.utc)
     server = claims.get("iss_server_url", "https://github.com")
-    return {
+    statement = {
         "type": STATEMENT_TYPE,
         "issuer": ISSUER_NAME,
         "issuedAt": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -102,6 +116,9 @@ def build_statement(claims, apk_bytes, now=None):
             "runUrl": f"{server}/{claims['repository']}/actions/runs/{claims.get('run_id', '')}",
         },
     }
+    if inputs is not None:
+        statement["inputs"] = summarize_inputs(inputs)
+    return statement
 
 
 def key_id(public_key):
@@ -123,9 +140,9 @@ def sign_statement(statement, private_key):
     return json.dumps(envelope, separators=(",", ":")).encode()
 
 
-def attest_apk(apk_bytes, claims, private_key, now=None):
+def attest_apk(apk_bytes, claims, private_key, now=None, inputs=None):
     """Return the APK with a signed provenance statement embedded."""
-    statement = build_statement(claims, apk_bytes, now)
+    statement = build_statement(claims, apk_bytes, now, inputs)
     envelope = sign_statement(statement, private_key)
     return apkblock.set_pair(apk_bytes, apkblock.PROVENANCE_PAIR_ID, envelope), statement
 
@@ -158,6 +175,10 @@ def main(argv=None):
         "e.g. owner/repo/.github/workflows/attested-build.yml@",
     )
     parser.add_argument(
+        "--inputs",
+        help="build inputs recorded by poc/builder/collect_inputs.py (JSON)",
+    )
+    parser.add_argument(
         "--insecure-claims-file",
         help="LOCAL TESTING ONLY: read build claims from a JSON file instead of "
         "verifying a GitHub OIDC token",
@@ -178,7 +199,11 @@ def main(argv=None):
         with open(args.apk, "rb") as f:
             apk_bytes = f.read()
         private_key, key_source = load_private_key(args.key)
-        attested, statement = attest_apk(apk_bytes, claims, private_key)
+        inputs = None
+        if args.inputs:
+            with open(args.inputs) as f:
+                inputs = json.load(f)
+        attested, statement = attest_apk(apk_bytes, claims, private_key, inputs=inputs)
     except (PolicyError, apkblock.ApkFormatError, jwt.PyJWTError) as e:
         print(f"attestation refused: {e}", file=sys.stderr)
         return 1

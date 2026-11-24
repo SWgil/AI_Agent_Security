@@ -27,6 +27,10 @@ data class Provenance(
     val workflowRef: String,
     val runnerEnvironment: String,
     val runUrl: String,
+    /** Hosts the build contacted, as "host:port"; null if the build was not recorded. */
+    val buildHosts: List<String>?,
+    /** Number of downloaded files whose hashes the issuer recorded. */
+    val inputArtifactCount: Int,
 )
 
 enum class InvalidReason {
@@ -113,6 +117,8 @@ object ApkProvenanceVerifier {
                 signerCertDigest = subject.getString("signerCertDigest")
                 val source = statement.getJSONObject("source")
                 val build = statement.getJSONObject("build")
+                val inputs = statement.optJSONObject("inputs")
+                val hosts = inputs?.getJSONArray("networkHosts")
                 provenance = Provenance(
                     issuer = statement.getString("issuer"),
                     issuedAt = statement.getString("issuedAt"),
@@ -126,6 +132,8 @@ object ApkProvenanceVerifier {
                     workflowRef = build.optString("workflowRef"),
                     runnerEnvironment = build.optString("runnerEnvironment"),
                     runUrl = build.optString("runUrl"),
+                    buildHosts = hosts?.let { array -> List(array.length()) { array.getString(it) } },
+                    inputArtifactCount = inputs?.optInt("artifactCount") ?: 0,
                 )
             } catch (e: JSONException) {
                 return VerifyResult.Invalid(InvalidReason.MALFORMED)

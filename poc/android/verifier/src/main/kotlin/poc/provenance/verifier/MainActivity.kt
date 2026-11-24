@@ -172,8 +172,13 @@ class MainActivity : Activity() {
             append("빌드 워크플로: ${p.workflowRef}\n")
             append("발급: ${p.issuedAt}\n")
             append("발급자: ${p.issuer}\n")
+            p.buildHosts?.let { hosts ->
+                append("\n빌드 중 접속한 외부 호스트 (받아온 파일 ${p.inputArtifactCount}개의 해시 기록됨)\n")
+                if (hosts.isEmpty()) append("• 없음\n")
+                hosts.forEach { append("• ${it.removeSuffix(":443")}\n") }
+            }
             if (report.signals.isNotEmpty()) {
-                append("\n저장소 확인 결과\n")
+                append("\n확인 결과\n")
                 report.signals.forEach { append("${marker(it.severity)} ${describe(it)}\n") }
             }
             if (risky.isNotEmpty()) {
@@ -234,6 +239,8 @@ class MainActivity : Activity() {
         SignalKind.NEW_ACCOUNT -> "만들어진 지 ${signal.value}일 된 계정입니다."
         SignalKind.FORK -> "${signal.value ?: "다른 저장소"}의 포크입니다."
         SignalKind.BRAND_KEYWORD -> "저장소 이름에 사칭에 자주 쓰이는 단어(${signal.value})가 있습니다."
+        SignalKind.BUILD_INPUTS_NOT_RECORDED -> "빌드가 외부에서 무엇을 받아왔는지 기록되지 않았습니다."
+        SignalKind.UNEXPECTED_BUILD_HOST -> "빌드 중 일반적인 패키지 저장소가 아닌 곳에 접속했습니다: ${signal.value}"
     }
 
     private fun marker(severity: Severity) = when (severity) {
